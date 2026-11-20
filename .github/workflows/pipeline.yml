@@ -27,6 +27,7 @@ jobs:
       - name: cfn-guard
         run: |
           curl -sSL https://raw.githubusercontent.com/aws-cloudformation/cloudformation-guard/main/install-guard.sh | bash
+          export PATH="${PATH}:${HOME}/.guard/bin"
           cfn-guard validate --data templates/network.yaml \
             --rules policies/cfn-guard/no-private-subnet-igw.guard --show-summary all
           cfn-guard validate --data templates/security.yaml \
