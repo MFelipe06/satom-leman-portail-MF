@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  [PLACEHOLDER] Edge — ALB, Route 53, CloudFront.
+  Sprints 9 a 11 — non traites dans cette livraison.
+
+Parameters:
+  Env:
+    Type: String
+  Suffix:
+    Type: String
+    Default: "-MF"
+
+Resources:
+  Placeholder:
+    Type: AWS::CloudFormation::WaitConditionHandle

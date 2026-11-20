@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  VPC Peering — prod <-> dev.
+  Sprint 5 — Groupe Leman Finance SA.
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues: [dev, prod]
+  Suffix:
+    Type: String
+    Default: "-MF"
+  Projet:
+    Type: String
+    Default: SatomCloudNetwork
+  Equipe:
+    Type: String
+    Default: MF
+
+Resources:
+  Placeholder:
+    Type: AWS::CloudFormation::WaitConditionHandle

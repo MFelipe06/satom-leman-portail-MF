@@ -1,0 +1,16 @@
+rule no_admin_port_public {
+  AWS::EC2::SecurityGroup {
+    when properties.SecurityGroupIngress exists {
+      properties.SecurityGroupIngress[*] {
+        when FromPort == 22 or ToPort == 22 {
+          CidrIp != "0.0.0.0/0"
+          CidrIpv6 != "::/0"
+        }
+        when FromPort == 3389 or ToPort == 3389 {
+          CidrIp != "0.0.0.0/0"
+          CidrIpv6 != "::/0"
+        }
+      }
+    }
+  }
+}

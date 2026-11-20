@@ -1,0 +1,177 @@
+name: pipeline-satom-leman
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+
+  quality:
+    name: Qualite statique
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cfn-lint
+        uses: scottbrenner/cfn-lint-action@v2
+        with:
+          args: "templates/*.yaml"
+
+      - name: cfn-guard
+        run: |
+          curl -sSL https://raw.githubusercontent.com/aws-cloudformation/cloudformation-guard/main/install-guard.sh | bash
+          cfn-guard validate --data templates/network.yaml \
+            --rules policies/cfn-guard/no-private-subnet-igw.guard --show-summary all
+          cfn-guard validate --data templates/security.yaml \
+            --rules policies/cfn-guard/no-admin-port-public.guard --show-summary all
+
+      - name: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: templates/
+          framework: cloudformation
+          soft_fail: false
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/python
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests + couverture
+        run: |
+          pip install -r app/requirements-dev.txt
+          cd app && pytest tests/ --cov=src --cov-report=xml:../coverage.xml --cov-fail-under=80
+
+      - name: SonarCloud
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
+
+  security:
+    name: Securite statique
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: app/
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+
+      - name: SBOM Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: app/
+          format: cyclonedx-json
+          output-file: sbom/sbom-${{ github.sha }}.json
+
+      - name: Commit SBOM
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: SBOM ${{ github.sha }}"
+          file_pattern: sbom/
+
+  deploy-dev:
+    name: Deploiement dev
+    runs-on: ubuntu-latest
+    needs: security
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-2
+
+      - name: Deploy stack-leman-dev
+        run: |
+          CS="cs-dev-$(date +%Y%m%d%H%M%S)"
+          aws cloudformation create-change-set \
+            --stack-name stack-leman-dev \
+            --template-body file://templates/network.yaml \
+            --parameters file://parameters/dev.json \
+            --change-set-name "$CS" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region eu-central-2
+          aws cloudformation wait change-set-create-complete \
+            --stack-name stack-leman-dev --change-set-name "$CS" --region eu-central-2
+          DELETES=$(aws cloudformation describe-change-set \
+            --stack-name stack-leman-dev --change-set-name "$CS" --region eu-central-2 \
+            --query "Changes[?ResourceChange.Action=='Remove'] | length(@)" --output text)
+          if [ "$DELETES" -gt "0" ]; then
+            echo "ERREUR : $DELETES suppression(s) — validation manuelle requise."
+            aws cloudformation delete-change-set \
+              --stack-name stack-leman-dev --change-set-name "$CS" --region eu-central-2
+            exit 1
+          fi
+          aws cloudformation execute-change-set \
+            --stack-name stack-leman-dev --change-set-name "$CS" --region eu-central-2
+          aws cloudformation wait stack-update-complete \
+            --stack-name stack-leman-dev --region eu-central-2
+
+  deploy-prod:
+    name: Deploiement prod
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/main'
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-2
+
+      - name: Deploy stack-leman-prod
+        run: |
+          CS="cs-prod-$(date +%Y%m%d%H%M%S)"
+          aws cloudformation create-change-set \
+            --stack-name stack-leman-prod \
+            --template-body file://templates/network.yaml \
+            --parameters file://parameters/prod.json \
+            --change-set-name "$CS" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region eu-central-2
+          aws cloudformation wait change-set-create-complete \
+            --stack-name stack-leman-prod --change-set-name "$CS" --region eu-central-2
+          DELETES=$(aws cloudformation describe-change-set \
+            --stack-name stack-leman-prod --change-set-name "$CS" --region eu-central-2 \
+            --query "Changes[?ResourceChange.Action=='Remove'] | length(@)" --output text)
+          if [ "$DELETES" -gt "0" ]; then
+            echo "ERREUR : $DELETES suppression(s) — validation manuelle requise."
+            aws cloudformation delete-change-set \
+              --stack-name stack-leman-prod --change-set-name "$CS" --region eu-central-2
+            exit 1
+          fi
+          aws cloudformation execute-change-set \
+            --stack-name stack-leman-prod --change-set-name "$CS" --region eu-central-2
+          aws cloudformation wait stack-update-complete \
+            --stack-name stack-leman-prod --region eu-central-2

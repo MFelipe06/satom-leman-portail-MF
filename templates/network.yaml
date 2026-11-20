@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Reseau — VPC, sous-reseaux, IGW, NAT, tables de routage,
+  Network Firewall (conditionnel).
+  Sprints 1, 2, 4 — Groupe Leman Finance SA.
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues: [dev, prod]
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+  Suffix:
+    Type: String
+    Default: "-MF"
+  NatEnabled:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+  FwEnabled:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+  Projet:
+    Type: String
+    Default: SatomCloudNetwork
+  Equipe:
+    Type: String
+    Default: MF
+
+# TODO sprint 1 : VPC, sous-reseaux, IGW
+# TODO sprint 2 : NAT, tables de routage
+# TODO sprint 4 : Network Firewall
+
+Resources:
+  Placeholder:
+    Type: AWS::CloudFormation::WaitConditionHandle

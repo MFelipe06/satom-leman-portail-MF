@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Supervision — Security Hub, AWS Config.
+  G0 : Security Hub + Config actives (ADR-008).
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues: [dev, prod]
+  Suffix:
+    Type: String
+    Default: "-MF"
+  Projet:
+    Type: String
+    Default: SatomCloudNetwork
+  Equipe:
+    Type: String
+    Default: MF
+
+Resources:
+
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "satom-config-${AWS::AccountId}-${Env}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Projet
+          Value: !Ref Projet
+        - Key: Equipe
+          Value: !Ref Equipe
+        - Key: Environnement
+          Value: !Ref Env
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}"
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "role-config${Suffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: ConfigS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*"
+      Tags:
+        - Key: Projet
+          Value: !Ref Projet
+        - Key: Equipe
+          Value: !Ref Equipe
+        - Key: Environnement
+          Value: !Ref Env
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub "config-recorder${Suffix}"
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn: ConfigBucketPolicy
+    Properties:
+      S3BucketName: !Ref ConfigBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  SecurityHub:
+    Type: AWS::SecurityHub::Hub
+    DependsOn: ConfigRecorder
+    Properties:
+      Tags:
+        Projet: !Ref Projet
+        Equipe: !Ref Equipe
+        Environnement: !Ref Env
+
+Outputs:
+  ConfigBucketName:
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub "stack-leman-${Env}-ConfigBucket"
+  SecurityHubArn:
+    Value: !Ref SecurityHub
+    Export:
+      Name: !Sub "stack-leman-${Env}-SecurityHubArn"

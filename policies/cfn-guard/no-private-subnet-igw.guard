@@ -1,0 +1,8 @@
+rule no_private_subnet_igw {
+  AWS::EC2::Route {
+    when properties.DestinationCidrBlock == "0.0.0.0/0" {
+      properties.GatewayId not exists
+        or properties.GatewayId not matches /^igw-/
+    }
+  }
+}

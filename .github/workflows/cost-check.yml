@@ -1,0 +1,42 @@
+name: cost-check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * *"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-2
+
+      - name: NAT Gateways actives
+        run: |
+          aws ec2 describe-nat-gateways \
+            --filter Name=state,Values=available \
+            --region eu-central-2 \
+            --query "NatGateways[*].{Id:NatGatewayId,Subnet:SubnetId}" \
+            --output table
+
+      - name: Network Firewalls actifs
+        run: |
+          aws network-firewall list-firewalls \
+            --region eu-central-2 --output table
+
+      - name: EIP non associees
+        run: |
+          aws ec2 describe-addresses \
+            --region eu-central-2 \
+            --query "Addresses[?AssociationId==null].PublicIp" \
+            --output table

@@ -1,0 +1,9 @@
+[
+  { "ParameterKey": "Env",        "ParameterValue": "dev"               },
+  { "ParameterKey": "VpcCidr",    "ParameterValue": "10.1.0.0/16"       },
+  { "ParameterKey": "Suffix",     "ParameterValue": "-MF"               },
+  { "ParameterKey": "NatEnabled", "ParameterValue": "false"             },
+  { "ParameterKey": "FwEnabled",  "ParameterValue": "false"             },
+  { "ParameterKey": "Projet",     "ParameterValue": "SatomCloudNetwork"  },
+  { "ParameterKey": "Equipe",     "ParameterValue": "MF"                }
+]

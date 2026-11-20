@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Calcul — EC2 web-01-MF et app-01-MF, volumes EBS chiffres.
+  Sprint 2 — Groupe Leman Finance SA.
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues: [dev, prod]
+  Suffix:
+    Type: String
+    Default: "-MF"
+  Projet:
+    Type: String
+    Default: SatomCloudNetwork
+  Equipe:
+    Type: String
+    Default: MF
+
+Resources:
+  Placeholder:
+    Type: AWS::CloudFormation::WaitConditionHandle
